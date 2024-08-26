@@ -17,6 +17,8 @@ from dbt_common.dataclass_schema import dbtClassMixin, StrEnum, ValidationError
 from dbt_common.helper_types import Port
 from dbt_common.exceptions import DbtRuntimeError, CompilationError, DbtDatabaseError
 
+from dbt.adapters.redshift.data_api.connection import DataApiConnection
+
 if TYPE_CHECKING:
     # Indirectly imported via agate_helper, which is lazy loaded further downfile.
     # Used by mypy for earlier type hints.
@@ -41,6 +43,7 @@ class RedshiftConnectionMethod(StrEnum):
     DATABASE = "database"
     IAM = "iam"
     IAM_ROLE = "iam_role"
+    DATA_API = "data_api"
 
 
 class UserSSLMode(StrEnum):
@@ -127,6 +130,8 @@ class RedshiftCredentials(Credentials):
     autocommit: Optional[bool] = True
     access_key_id: Optional[str] = None
     secret_access_key: Optional[str] = None
+    workgroup: Optional[str] = None
+    secret_arn: Optional[str] = None
 
     _ALIASES = {"dbname": "database", "pass": "password"}
 
@@ -156,6 +161,8 @@ class RedshiftCredentials(Credentials):
             "retries",
             "autocommit",
             "access_key_id",
+            "workgroup",
+            "secret_arn"
         )
 
     @property
@@ -179,6 +186,12 @@ class RedshiftConnectMethodFactory:
             kwargs = self._iam_user_kwargs
         elif method == RedshiftConnectionMethod.IAM_ROLE:
             kwargs = self._iam_role_kwargs
+        elif method == RedshiftConnectionMethod.DATA_API:
+            kwargs = self._iam_role_kwargs
+            kwargs.update({"workgroup":self.credentials.workgroup,"secret_arn":self.credentials.secret_arn})
+            def connect_data_api() -> redshift_connector.Connection:
+                return DataApiConnection(**kwargs)
+            return connect_data_api
         else:
             raise FailedToConnectError(f"Invalid 'method' in profile: '{method}'")
 
