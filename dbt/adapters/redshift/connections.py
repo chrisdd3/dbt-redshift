@@ -132,6 +132,7 @@ class RedshiftCredentials(Credentials):
     secret_access_key: Optional[str] = None
     workgroup: Optional[str] = None
     secret_arn: Optional[str] = None
+    serverless: Optional[bool] = False
 
     _ALIASES = {"dbname": "database", "pass": "password"}
 
@@ -162,7 +163,7 @@ class RedshiftCredentials(Credentials):
             "autocommit",
             "access_key_id",
             "workgroup",
-            "secret_arn"
+            "secret_arn",
         )
 
     @property
@@ -187,10 +188,11 @@ class RedshiftConnectMethodFactory:
         elif method == RedshiftConnectionMethod.IAM_ROLE:
             kwargs = self._iam_role_kwargs
         elif method == RedshiftConnectionMethod.DATA_API:
-            kwargs = self._iam_role_kwargs
-            kwargs.update({"workgroup":self.credentials.workgroup,"secret_arn":self.credentials.secret_arn})
+            kwargs = self._data_api_kwargs
+
             def connect_data_api() -> redshift_connector.Connection:
                 return DataApiConnection(**kwargs)
+
             return connect_data_api
         else:
             raise FailedToConnectError(f"Invalid 'method' in profile: '{method}'")
@@ -204,6 +206,24 @@ class RedshiftConnectMethodFactory:
             return c
 
         return connect
+
+    @property
+    def _data_api_kwargs(self) -> Dict[str, Any]:
+        logger.debug("Connecting to redshift with 'data_api' credentials method")
+        kwargs = {
+            "database": self.credentials.database,
+            "cluster_identifier": self.credentials.cluster_id,
+            "db_user": self.credentials.user,
+            "workgroup": self.credentials.workgroup,
+            "secret_arn": self.credentials.secret_arn,
+            "iam_role": self.credentials.role,
+        }
+
+        if self.credentials.secret_arn or self.credentials.serverless:
+            kwargs.update(db_user=None)
+        if self.credentials.workgroup:
+            kwargs.update(cluster_identifier=None)
+        return kwargs
 
     @property
     def _database_kwargs(self) -> Dict[str, Any]:
