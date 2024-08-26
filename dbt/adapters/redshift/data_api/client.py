@@ -50,6 +50,7 @@ class RedshiftDataClient:
                 resp = self.client.batch_execute_statement(**self._connection_details, Database=self.database, Sqls=sqls)
                 log.info("queued [%s]", sqls)
                 id_ = resp["Id"]
+                print(f"executing {sqls}")
                 break
             except ClientError as ex:
                 if ex.response["Error"]["Code"] == "ActiveStatementsExceededException":
