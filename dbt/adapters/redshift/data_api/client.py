@@ -1,5 +1,4 @@
 import logging
-import math
 import time
 from itertools import chain
 from typing import List, Optional
@@ -101,7 +100,7 @@ class RedshiftDataClient:
     def _wait(self, id_: str, timeout_seconds: int = 120, check_internal_seconds=2):
         total = 0
         sleep_time = 0.1
-        assert check_internal_seconds < sleep_time, f"check_internal_seconds must be at least {sleep_time}"
+        assert check_internal_seconds >= sleep_time, f"check_internal_seconds must be at least {sleep_time}"
         while total < timeout_seconds:
             resp = self.client.describe_statement(Id=id_)
             status = resp["Status"].upper()
