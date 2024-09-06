@@ -99,14 +99,10 @@ class RedshiftDataClient:
         return first_page["ColumnMetadata"], iterator()
 
     def _wait(self, id_: str, timeout_seconds: int = 120, check_internal_seconds=2):
-        check_count = math.ceil(timeout_seconds / check_internal_seconds)
-        if check_count <= 0:
-            # jesus
-            logging.warning(
-                "timeout_seconds and check_internal_seconds should at least result in one check"
-            )
-            check_count = 5
-        for _ in range(check_count):
+        total = 0
+        sleep_time = 0.1
+        assert check_internal_seconds < sleep_time, f"check_internal_seconds must be at least {sleep_time}"
+        while total < timeout_seconds:
             resp = self.client.describe_statement(Id=id_)
             status = resp["Status"].upper()
             # happy scenario first
@@ -115,10 +111,14 @@ class RedshiftDataClient:
                 return resp.get("ResultsRows", 0)
             if status in ("SUBMITTED", "PICKED", "STARTED"):
                 # in progress
-                time.sleep(check_internal_seconds)
+                time.sleep(sleep_time)
+                total += sleep_time
+                # increase sleep time 
+                sleep_time = min(sleep_time*2,check_internal_seconds)
                 continue
             if status in ("ABORTED", "FAILED"):
                 raise RedshiftQueryException(id_, status, resp["Error"])
+
             raise RuntimeError(f"query [{id_}] invalid status [{status}]")
         # timeout
         # cancel the statement if possible, ignoring all errors
@@ -127,4 +127,4 @@ class RedshiftDataClient:
             self.client.cancel_statement(Id=str)
         except Exception:
             pass
-        raise RuntimeError(f"query [{id_}] timed out after [{timeout_seconds}]")
+        raise RuntimeError(f"query [{id_}] timed out after [{total}]")
